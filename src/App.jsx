@@ -659,18 +659,15 @@ function Journal({ sessions, setSessions }) {
     if(analysis[session.id]) return;
     setAnalyzing(session.id);
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages",{
+      const GEMINI_KEY = "AIzaSyAQ.Ab8RN6IYG-B3MqvTiBNaFzrVxH1y4Mw2CR2vWUZEorog5rYDJA";
+      const prompt = `Tu es ARIA, coach running IA. Analyse cette séance et génère un rapport en JSON strict (sans backticks ni markdown) avec ces champs : {"summary":"string","positives":["string"],"improvements":["string"],"recovery":"string","nextSession":"string","intensityZone":"string","effortScore":number}. Max 40 mots par champ. Séance : ${session.type} · ${session.dist}km · ${session.dur}min · Allure ${session.pace}/km · FC moy ${session.hr}bpm · Ressenti ${session.feel}/5 · Notes: ${session.notes||"aucune"}`;
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          model:"claude-sonnet-4-20250514",
-          max_tokens:1000,
-          system:`Tu es ARIA, coach running IA de l'app STRIDE. Analyse cette séance et génère un rapport en JSON strict (sans backticks ni markdown) avec ces champs : {"summary":"string","positives":["string"],"improvements":["string"],"recovery":"string","nextSession":"string","intensityZone":"string","effortScore":number}. Sois précis, data-driven, bienveillant. Max 40 mots par champ.`,
-          messages:[{role:"user",content:`Séance : ${session.type} · ${session.dist}km · ${session.dur}min · Allure ${session.pace}/km · FC moy ${session.hr}bpm · Ressenti ${session.feel}/5 · Notes: ${session.notes||"aucune"}`}]
-        })
+        body:JSON.stringify({contents:[{role:"user",parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:600}})
       });
       const data = await res.json();
-      const text = data.content?.[0]?.text||"{}";
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text||"{}";
       const clean = text.replace(/```json?|```/g,"").trim();
       setAnalysis(p=>({...p,[session.id]:JSON.parse(clean)}));
     } catch {
@@ -1035,18 +1032,22 @@ function ARIAChat({ sessions, profile }) {
     setMsgs(newMsgs);
     setLoading(true);
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages",{
+      const GEMINI_KEY = "AIzaSyAQ.Ab8RN6IYG-B3MqvTiBNaFzrVxH1y4Mw2CR2vWUZEorog5rYDJA";
+      const history = newMsgs.slice(0,-1).map(m=>({
+        role: m.role==="assistant"?"model":"user",
+        parts:[{text:m.content}]
+      }));
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,{
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
-          model:"claude-sonnet-4-20250514",
-          max_tokens:1000,
-          system:SYSTEM,
-          messages:newMsgs.map(m=>({role:m.role,content:m.content}))
+          system_instruction:{parts:[{text:SYSTEM}]},
+          contents:[...history,{role:"user",parts:[{text:newMsgs[newMsgs.length-1].content}]}],
+          generationConfig:{maxOutputTokens:800,temperature:0.9}
         })
       });
       const data = await res.json();
-      const reply = data.content?.[0]?.text || "Erreur de connexion.";
+      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "Erreur de connexion.";
       setMsgs(p=>[...p,{role:"assistant",content:reply}]);
       // ARIA lit sa réponse automatiquement si on est en mode vocal
       if (listening === false && voiceMode) speak(reply);
