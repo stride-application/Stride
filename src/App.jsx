@@ -636,7 +636,7 @@ function SessionCard({ session, onDelete, style:extraStyle={} }) {
 /* ══════════════════════════════════════════════════════════════════
    JOURNAL
 ══════════════════════════════════════════════════════════════════ */
-function Journal({ sessions, setSessions }) {
+function Journal({ sessions, setSessions, apiKey }) {
   const [adding, setAdding] = useState(false);
   const [analyzing, setAnalyzing] = useState(null);
   const [analysis, setAnalysis] = useState({});
@@ -659,7 +659,7 @@ function Journal({ sessions, setSessions }) {
     if(analysis[session.id]) return;
     setAnalyzing(session.id);
     try {
-      const GEMINI_KEY = "AIzaSyAQ.Ab8RN6IYG-B3MqvTiBNaFzrVxH1y4Mw2CR2vWUZEorog5rYDJA";
+      const GEMINI_KEY = apiKey;
       const prompt = `Tu es ARIA, coach running IA. Analyse cette séance et génère un rapport en JSON strict (sans backticks ni markdown) avec ces champs : {"summary":"string","positives":["string"],"improvements":["string"],"recovery":"string","nextSession":"string","intensityZone":"string","effortScore":number}. Max 40 mots par champ. Séance : ${session.type} · ${session.dist}km · ${session.dur}min · Allure ${session.pace}/km · FC moy ${session.hr}bpm · Ressenti ${session.feel}/5 · Notes: ${session.notes||"aucune"}`;
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,{
         method:"POST",
@@ -949,7 +949,7 @@ function Plans() {
 /* ══════════════════════════════════════════════════════════════════
    ARIA CHAT
 ══════════════════════════════════════════════════════════════════ */
-function ARIAChat({ sessions, profile }) {
+function ARIAChat({ sessions, profile, apiKey }) {
   const INIT = [{
     role:"assistant",
     content:`Salut **${profile.name}** ⚡ Je suis **ARIA** — ton coach, ta confidente, ta partenaire au quotidien.\n\nJe suis là pour tout : ton entraînement, ta récupération, ta nutrition... mais aussi pour papoter, rigoler, ou juste décompresser après une journée difficile.\n\nJ'ai jeté un œil à tes **${sessions.length} dernières séances** — tu progresses bien. Mais on peut parler de n'importe quoi, pas seulement de running 😊\n\nAlors, quoi de neuf aujourd'hui ?`
@@ -1032,7 +1032,7 @@ function ARIAChat({ sessions, profile }) {
     setMsgs(newMsgs);
     setLoading(true);
     try {
-      const GEMINI_KEY = "AIzaSyAQ.Ab8RN6IYG-B3MqvTiBNaFzrVxH1y4Mw2CR2vWUZEorog5rYDJA";
+      const GEMINI_KEY = apiKey;
       const history = newMsgs.slice(0,-1).map(m=>({
         role: m.role==="assistant"?"model":"user",
         parts:[{text:m.content}]
@@ -1585,8 +1585,81 @@ export default function App() {
   const [tab, setTab] = useState("home");
   const [sessions, setSessions] = useState(SESSIONS);
   const [profile, setProfile] = useState(PROFILE);
+  const [apiKey, setApiKey] = useState(()=>localStorage.getItem("stride_gemini_key")||"");
+  const [keyInput, setKeyInput] = useState("");
+  const [showKeyScreen, setShowKeyScreen] = useState(false);
 
-  if (!ready) return <SplashScreen onDone={()=>setReady(true)}/>;
+  if (!ready) return <SplashScreen onDone={()=>{ setReady(true); if(!localStorage.getItem("stride_gemini_key")) setShowKeyScreen(true); }}/>;
+
+  if (showKeyScreen) return (
+    <div style={{
+      position:"fixed",inset:0,background:"var(--void)",
+      display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+      padding:24,gap:20,fontFamily:"var(--font-body)"
+    }}>
+      <div style={{
+        width:64,height:64,borderRadius:"50%",
+        background:`linear-gradient(135deg,${C.electric},${C.cyan})`,
+        display:"flex",alignItems:"center",justifyContent:"center",
+        boxShadow:`0 0 40px ${C.electric}60`,animation:"float 3s ease-in-out infinite"
+      }}><Ico n="brain" s={28} c="#020408"/></div>
+      <div style={{textAlign:"center"}}>
+        <h1 style={{fontFamily:"var(--font-head)",fontSize:22,fontWeight:900,
+          background:`linear-gradient(90deg,${C.electric},${C.cyan})`,
+          WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",marginBottom:8}}>
+          Configurer ARIA
+        </h1>
+        <p style={{color:"var(--muted)",fontSize:13,lineHeight:1.6}}>
+          Pour activer ARIA, tu as besoin d'une clé API Google Gemini.<br/>
+          C'est <strong style={{color:C.neon}}>100% gratuit</strong> — aucune carte bancaire requise.
+        </p>
+      </div>
+      <div style={{
+        background:"var(--card)",border:`1px solid ${C.electric}30`,
+        borderRadius:14,padding:16,width:"100%",maxWidth:380
+      }}>
+        <p style={{fontFamily:"var(--font-mono)",fontSize:9,color:C.electric,letterSpacing:".12em",textTransform:"uppercase",marginBottom:10}}>Comment obtenir ta clé gratuite</p>
+        {[
+          "Va sur aistudio.google.com",
+          "Connecte-toi avec Google",
+          "☰ → API Keys → Créer une clé",
+          "Colle-la ici ↓"
+        ].map((s,i)=>(
+          <div key={i} style={{display:"flex",gap:10,alignItems:"center",marginBottom:8}}>
+            <div style={{
+              width:22,height:22,borderRadius:"50%",background:`${C.electric}20`,
+              border:`1px solid ${C.electric}40`,display:"flex",alignItems:"center",justifyContent:"center",
+              fontFamily:"var(--font-mono)",fontSize:10,color:C.electric,flexShrink:0
+            }}>{i+1}</div>
+            <span style={{fontSize:12,color:"var(--text2)"}}>{s}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{width:"100%",maxWidth:380}}>
+        <input
+          placeholder="AIzaSy..."
+          value={keyInput}
+          onChange={e=>setKeyInput(e.target.value)}
+          style={{
+            background:"rgba(0,180,255,.05)",border:`1px solid ${C.electric}40`,
+            borderRadius:10,color:"var(--text)",fontFamily:"var(--font-mono)",
+            fontSize:13,padding:"12px 14px",width:"100%",outline:"none",marginBottom:10
+          }}/>
+        <CyberBtn variant="cyan" style={{width:"100%",justifyContent:"center"}}
+          disabled={keyInput.length < 20}
+          onClick={()=>{
+            localStorage.setItem("stride_gemini_key", keyInput.trim());
+            setApiKey(keyInput.trim());
+            setShowKeyScreen(false);
+          }}>
+          <Ico n="bolt" s={14}/> Activer ARIA
+        </CyberBtn>
+        <p style={{fontFamily:"var(--font-mono)",fontSize:9,color:"var(--muted)",textAlign:"center",marginTop:8,letterSpacing:".05em"}}>
+          Ta clé est stockée uniquement sur ton appareil
+        </p>
+      </div>
+    </div>
+  );
 
   const NAV = [
     {id:"home",   icon:"home",  label:"Accueil"},
@@ -1627,6 +1700,7 @@ export default function App() {
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <Chip color={C.neon} glow>v2</Chip>
+            <button onClick={()=>setShowKeyScreen(true)} style={{background:'transparent',border:'none',cursor:'pointer',padding:4}}><Ico n='settings' s={16} c='var(--muted)'/></button>
             <div style={{
               width:30,height:30,borderRadius:8,
               background:"var(--card)",border:"1px solid var(--border)",
@@ -1642,8 +1716,8 @@ export default function App() {
         {/* Content */}
         <div style={{flex:1,overflowY:"auto",padding:"16px 16px 0"}}>
           {tab==="home"    && <Dashboard sessions={sessions} profile={profile}/>}
-          {tab==="journal" && <Journal sessions={sessions} setSessions={setSessions}/>}
-          {tab==="aria"    && <ARIAChat sessions={sessions} profile={profile}/>}
+          {tab==="journal" && <Journal sessions={sessions} setSessions={setSessions} apiKey={apiKey}/>}
+          {tab==="aria"    && <ARIAChat sessions={sessions} profile={profile} apiKey={apiKey}/>}
           {tab==="health"  && <Health profile={profile}/>}
           {tab==="profile" && <Profile profile={profile} setProfile={setProfile}/>}
           <div style={{height:90}}/>
