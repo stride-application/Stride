@@ -1024,39 +1024,6 @@ function ARIAChat({ sessions, profile, apiKey }) {
     setListening(false);
   };
 
-  // ── Send avec TTS auto ────────────────────────────────────────
-  const sendText = async (text) => {
-    if (!text.trim() || loading) return;
-    const um = {role:"user", content:text.trim()};
-    const newMsgs = [...msgs, um];
-    setMsgs(newMsgs);
-    setLoading(true);
-    try {
-      const GEMINI_KEY = apiKey;
-      const history = newMsgs.slice(0,-1).map(m=>({
-        role: m.role==="assistant"?"model":"user",
-        parts:[{text:m.content}]
-      }));
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          system_instruction:{parts:[{text:SYSTEM}]},
-          contents:[...history,{role:"user",parts:[{text:newMsgs[newMsgs.length-1].content}]}],
-          generationConfig:{maxOutputTokens:800,temperature:0.9}
-        })
-      });
-      const data = await res.json();
-      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "Erreur de connexion.";
-      setMsgs(p=>[...p,{role:"assistant",content:reply}]);
-      // ARIA lit sa réponse automatiquement si on est en mode vocal
-      if (listening === false && voiceMode) speak(reply);
-    } catch {
-      setMsgs(p=>[...p,{role:"assistant",content:"❌ Connexion API indisponible."}]);
-    }
-    setLoading(false);
-  };
-
   const [voiceMode, setVoiceMode] = useState(false);
 
   const SYSTEM = `Tu es ARIA, l'IA de l'app STRIDE. Tu es bien plus qu'un coach sportif : tu es une vraie compagne de vie pour ${profile.name}.
@@ -1088,6 +1055,35 @@ Règles absolues :
 - Si la question n'est pas sportive, réponds normalement comme une amie intelligente
 - Jamais de réponse générique ou froide
 - Parfois une touche d'humour ou d'encouragement spontané`;
+
+  const sendText = async (text) => {
+    if (!text.trim() || loading) return;
+    const um = {role:"user", content:text.trim()};
+    const newMsgs = [...msgs, um];
+    setMsgs(newMsgs);
+    setLoading(true);
+    try {
+      const res = await fetch("http://localhost:11434/api/chat",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          model:"llama3.1:8b",
+          stream:false,
+          messages:[
+            {role:"system",content:SYSTEM},
+            ...newMsgs.map(m=>({role:m.role==="assistant"?"assistant":"user",content:m.content}))
+          ]
+        })
+      });
+      const data = await res.json();
+      const reply = data.message?.content || "Erreur.";
+      setMsgs(p=>[...p,{role:"assistant",content:reply}]);
+      if (voiceMode) speak(reply);
+    } catch(e) {
+      setMsgs(p=>[...p,{role:"assistant",content:"❌ Lance ollama serve dans Termux."}]);
+    }
+    setLoading(false);
+  };
 
   const send = () => {
     if (!input.trim() || loading) return;
