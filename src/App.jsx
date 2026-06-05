@@ -1063,24 +1063,28 @@ Règles absolues :
     setMsgs(newMsgs);
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:11434/api/chat",{
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions",{
         method:"POST",
-        headers:{"Content-Type":"application/json"},
+        headers:{
+          "Content-Type":"application/json",
+          "Authorization":`Bearer ${apiKey}`
+        },
         body:JSON.stringify({
-          model:"llama3.1:8b",
-          stream:false,
+          model:"llama-3.1-70b-versatile",
           messages:[
             {role:"system",content:SYSTEM},
             ...newMsgs.map(m=>({role:m.role==="assistant"?"assistant":"user",content:m.content}))
-          ]
+          ],
+          max_tokens:800,
+          temperature:0.9
         })
       });
       const data = await res.json();
-      const reply = data.message?.content || "Erreur.";
+      const reply = data.choices?.[0]?.message?.content || "Erreur de connexion.";
       setMsgs(p=>[...p,{role:"assistant",content:reply}]);
       if (voiceMode) speak(reply);
     } catch(e) {
-      setMsgs(p=>[...p,{role:"assistant",content:"❌ Lance ollama serve dans Termux."}]);
+      setMsgs(p=>[...p,{role:"assistant",content:"❌ Erreur de connexion ARIA."}]);
     }
     setLoading(false);
   };
@@ -1616,9 +1620,9 @@ export default function App() {
       }}>
         <p style={{fontFamily:"var(--font-mono)",fontSize:9,color:C.electric,letterSpacing:".12em",textTransform:"uppercase",marginBottom:10}}>Comment obtenir ta clé gratuite</p>
         {[
-          "Va sur aistudio.google.com",
-          "Connecte-toi avec Google",
-          "☰ → API Keys → Créer une clé",
+          "Va sur console.groq.com",
+          "Connecte-toi avec Google ou GitHub",
+          "☰ → API Keys → Create API Key",
           "Colle-la ici ↓"
         ].map((s,i)=>(
           <div key={i} style={{display:"flex",gap:10,alignItems:"center",marginBottom:8}}>
